@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      margin: 0;
+      background: rgba(10, 10, 15, 0.95);
+      color: #00ffcc;
+      font-family: monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #canvas-container {
+      width: 380px;
+      height: 440px;
+      position: relative;
+    }
+    #telemetry {
+      margin-top: 10px;
+      font-size: 14px;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 12px 18px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      width: 320px;
+      display: flex;
+      justify-content: space-between;
+      font-weight: bold;
+    }
+    .val-x { color: #ff5555; }
+    .val-y { color: #55ff55; }
+    .val-z { color: #5588ff; }
+  </style>
+  <!-- Three.js Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <div id="telemetry">
+    <div>X: <span id="beta" class="val-x">0.0</span>°</div>
+    <div>Y: <span id="gamma" class="val-y">0.0</span>°</div>
+    <div>Z: <span id="alpha" class="val-z">0.0</span>°</div>
+  </div>
+
+  <script>
+    // 1. Setup Larger Three.js Scene & Camera
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+    camera.position.set(280, 200, 280);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    // 2. Fixed World Elements (Larger Grid & Static Reference Rings)
+    const gridHelper = new THREE.GridHelper(220, 12, 0x555555, 0x333333);
+    scene.add(gridHelper);
+
+    const createStaticRing = (radius, rotX, rotY, rotZ) => {
+      const ringGeo = new THREE.RingGeometry(radius - 0.8, radius + 0.8, 64);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0xdd9933, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.rotation.set(rotX, rotY, rotZ);
+      return ringMesh;
+    };
+    // Fixed non-moving background rings
+    scene.add(createStaticRing(110, Math.PI / 2, 0, 0));
+    scene.add(createStaticRing(110, 0, Math.PI / 2, 0));
+    scene.add(createStaticRing(110, 0, 0, 0));
+
+    // 3. Dynamic Phone Group (Larger Dimensions)
+    const phoneGroup = new THREE.Group();
+    scene.add(phoneGroup);
+
+    // Larger Phone Body Frame
+    const phoneGeo = new THREE.BoxGeometry(80, 160, 14);
+    const phoneMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true });
+    const phoneMesh = new THREE.Mesh(phoneGeo, phoneMat);
+    phoneGroup.add(phoneMesh);
+
+    // Screen Glass Face
+    const screenGeo = new THREE.PlaneGeometry(68, 142);
+    const screenMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, side: THREE.DoubleSide, transparent: true, opacity: 0.25 });
+    const screenMesh = new THREE.Mesh(screenGeo, screenMat);
+    screenMesh.position.z = 7.1;
+    phoneGroup.add(screenMesh);
+
+    // 4. Larger Moving RGB Axis Arrows (Red=X, Green=Y, Blue=Z)
+    const axisX = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 110, 0xff3333, 18, 8);
+    const axisY = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 110, 0x33ff33, 18, 8);
+    const axisZ = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 110, 0x3388ff, 18, 8);
+    phoneGroup.add(axisX);
+    phoneGroup.add(axisY);
+    phoneGroup.add(axisZ);
+
+    // 5. Corrected Sensor Quaternion Rotation Mapping (W3C standard)
+    const zee = new THREE.Vector3(0, 0, 1);
+    const euler = new THREE.Euler();
+    const q0 = new THREE.Quaternion();
+    const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // Correct coordinate alignment for mobile browsers
+
+    window.addEventListener('deviceorientation', function(event) {
+      let alpha = event.alpha ? THREE.MathUtils.degToRad(event.alpha) : 0;
+      let beta = event.beta ? THREE.MathUtils.degToRad(event.beta) : 0;
+      let gamma = event.gamma ? THREE.MathUtils.degToRad(event.gamma) : 0;
+
+      // Apply standard device orientation quaternion math to prevent any flipping or skewing
+      euler.set(beta, alpha, -gamma, 'YXZ');
+      phoneGroup.quaternion.setFromEuler(euler);
+      phoneGroup.quaternion.multiply(q1);
+
+      // Display live angle telemetry
+      document.getElementById('beta').innerText = (event.beta || 0).toFixed(1);
+      document.getElementById('gamma').innerText = (event.gamma || 0).toFixed(1);
+      document.getElementById('alpha').innerText = (event.alpha || 0).toFixed(1);
+    }, true);
+
+    // Render Animation Loop
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>
